@@ -100,8 +100,25 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnApply.setOnClickListener(v -> {
-            Toast.makeText(this, "设置已应用", Toast.LENGTH_SHORT).show();
-            // 仅应用参数，不控制服务
+            if (isVibrateServiceRunning()) {
+                // 服务正在运行，发送带参数的 intent 让参数立即生效
+                int interval = parseInt(editInterval.getText().toString(), 60);
+                int count = parseInt(editCount.getText().toString(), 1);
+                int unitPos = spinnerUnit.getSelectedItemPosition();
+                if (unitPos == 1) interval = interval * 60;
+                int loop = parseInt(editLoop.getText().toString(), -1);
+                String toastText = editToast.getText().toString();
+                if (toastText.isEmpty()) toastText = "该翻身了";
+                Intent intent = new Intent(this, VibrateService.class);
+                intent.putExtra(VibrateService.EXTRA_INTERVAL, interval);
+                intent.putExtra(VibrateService.EXTRA_COUNT, count);
+                intent.putExtra(VibrateService.EXTRA_LOOP, loop);
+                intent.putExtra(VibrateService.EXTRA_TOAST, toastText);
+                startService(intent);
+                Toast.makeText(this, "设置已应用并生效", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "服务未运行，设置仅保存", Toast.LENGTH_SHORT).show();
+            }
         });
 
         btnStartStop.setOnClickListener(v -> {
