@@ -22,6 +22,9 @@
                 <EditText
                     android:id="@+id/edit_interval"
                     android:inputType="number"
+                    android:digits="0123456789"
+                    android:minEms="1"
+                    android:minHeight="0dp"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -38,6 +41,9 @@
             <EditText
                 android:id="@+id/edit_count"
                 android:inputType="number"
+                android:digits="0123456789"
+                android:minEms="1"
+                android:minHeight="0dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="0"/>
@@ -46,6 +52,9 @@
             <EditText
                 android:id="@+id/edit_loop"
                 android:inputType="number"
+                android:digits="0123456789"
+                android:minEms="1"
+                android:minHeight="0dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="3"/>

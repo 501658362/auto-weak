@@ -132,7 +132,8 @@ public class VibrateService extends Service {
                 }
             }
         };
-        handler.post(vibrateRunnable);
+        // 修改：第一次也延迟 intervalSec 秒后再执行
+        handler.postDelayed(vibrateRunnable, intervalSec * 1000L);
     }
 
     // 连续震动 count 次，每次间隔 300ms

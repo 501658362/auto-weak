@@ -50,6 +50,8 @@ public class MainActivity extends AppCompatActivity {
         btnStartStop = findViewById(R.id.btn_start_stop);
         Button btnApply = findViewById(R.id.btn_apply);
 
+        // 新增：读取参数并填充
+        loadParams(editInterval, editCount, spinnerUnit, editLoop, editToast);
 
         // 每次进入页面时检查服务是否在运行，刷新按钮文案
         if (isVibrateServiceRunning()) {
@@ -123,6 +125,8 @@ public class MainActivity extends AppCompatActivity {
 
         btnStartStop.setOnClickListener(v -> {
             if (!isRunning) {
+                // 新增：保存参数
+                saveParams(editInterval, editCount, spinnerUnit, editLoop, editToast);
                 startVibrateService(editInterval, editCount, spinnerUnit, editLoop, editToast);
                 btnStartStop.setText("停止");
                 isRunning = true;
@@ -211,9 +215,10 @@ public class MainActivity extends AppCompatActivity {
 
     private int parseInt(String s, int def) {
         try {
-            return Integer.parseInt(s);
+            int v = Integer.parseInt(s.replaceAll("[^0-9]", ""));
+            return Math.max(v, 0); // 最小为0
         } catch (Exception e) {
-            return def;
+            return Math.max(def, 0);
         }
     }
 
@@ -226,6 +231,33 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return false;
+    }
+
+    // 新增：保存参数到 SharedPreferences
+    private void saveParams(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast) {
+        getSharedPreferences("vibrate_params", MODE_PRIVATE)
+            .edit()
+            .putInt("interval", parseInt(editInterval.getText().toString(), 60))
+            .putInt("count", parseInt(editCount.getText().toString(), 1))
+            .putInt("unit", spinnerUnit.getSelectedItemPosition())
+            .putInt("loop", parseInt(editLoop.getText().toString(), -1))
+            .putString("toast", editToast.getText().toString())
+            .apply();
+    }
+
+    // 新增：读取参数并填充到输入框
+    private void loadParams(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast) {
+        android.content.SharedPreferences sp = getSharedPreferences("vibrate_params", MODE_PRIVATE);
+        int interval = sp.getInt("interval", 60);
+        int count = sp.getInt("count", 1);
+        int unit = sp.getInt("unit", 0);
+        int loop = sp.getInt("loop", 0);
+        String toast = sp.getString("toast", "");
+        editInterval.setText(String.valueOf(interval));
+        editCount.setText(String.valueOf(count));
+        spinnerUnit.setSelection(unit);
+        editLoop.setText(String.valueOf(loop));
+        editToast.setText(toast);
     }
 
     @Override
