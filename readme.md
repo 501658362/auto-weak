@@ -1,5 +1,5 @@
 # 安卓定时震动提醒 APP
-![应用演示](demo.jpg)
+<img src="demo.jpg" height="200px" />
 
 ## 应用简介
 
