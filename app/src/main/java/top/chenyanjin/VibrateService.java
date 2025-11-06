@@ -58,6 +58,7 @@ public class VibrateService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopSelf();
+            removeNotification(); // 新增：手动停止时移除通知
             return START_NOT_STICKY;
         }
         if (intent != null) {
@@ -188,6 +189,7 @@ public class VibrateService extends Service {
                     finishIntent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES); // 确保广播能发给未启动的接收方
                     LogUtil.i("VibrateService", "发送结束广播: " + finishIntent);
                     sendBroadcast(finishIntent);
+                    removeNotification(); // 新增：自动结束时移除通知
                     stopSelf();
                     return;
                 }
@@ -294,6 +296,13 @@ public class VibrateService extends Service {
         }
     }
 
+    private void removeNotification() {
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager != null) {
+            manager.cancel(NOTIFY_ID);
+        }
+    }
+
     private void showToast(final String text) {
         Handler mainHandler = new Handler(Looper.getMainLooper());
         mainHandler.post(() -> Toast.makeText(getApplicationContext(), text, Toast.LENGTH_SHORT).show());
@@ -302,7 +311,8 @@ public class VibrateService extends Service {
     @Override
     public void onDestroy() {
         stopVibrateLoop();
-        stopNotifyCountdown(); // 新增：停止通知栏刷新
+        stopNotifyCountdown();
+        removeNotification(); // 新增：销毁时确保通知被移除
         stopForeground(true);
         super.onDestroy();
     }
