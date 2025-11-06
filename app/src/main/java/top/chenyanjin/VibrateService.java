@@ -129,6 +129,14 @@ public class VibrateService extends Service {
                     showShakeNotification(); // 新增：屏幕抖动通知
                 }
                 currentLoop++;
+                // 新增：发送下一次执行时间广播
+                if (running && (loop < 0 || currentLoop < loop)) {
+                    long nextTime = System.currentTimeMillis() + intervalSec * 1000L;
+                    Intent nextIntent = new Intent("top.chenyanjin.VIBRATE_NEXT");
+                    nextIntent.putExtra("next_execute_time", nextTime);
+                    sendBroadcast(nextIntent);
+                    handler.postDelayed(this, intervalSec * 1000L);
+                }
                 if (loop > 0 && currentLoop >= loop) {
                     // 循环结束时发送显式广播
                     LogUtil.i("info", "循环结束时发送显式广播");
@@ -139,9 +147,6 @@ public class VibrateService extends Service {
                     sendBroadcast(finishIntent);
                     stopSelf();
                     return;
-                }
-                if (running && (loop < 0 || currentLoop < loop)) {
-                    handler.postDelayed(this, intervalSec * 1000L);
                 }
             }
         };

@@ -67,6 +67,24 @@
                 android:textColor="#FF6200EE"
                 android:paddingTop="8dp"/>
 
+            <!-- 新增：下一次执行时间 -->
+            <TextView
+                android:id="@+id/tv_next_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="下一次执行时间："
+                android:textColor="#FF6200EE"
+                android:paddingTop="8dp"/>
+
+            <!-- 新增：倒计时 -->
+            <TextView
+                android:id="@+id/tv_countdown"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="倒计时："
+                android:textColor="#FF6200EE"
+                android:paddingTop="4dp"/>
+
             <EditText
                 android:id="@+id/edit_toast"
                 android:layout_width="match_parent"

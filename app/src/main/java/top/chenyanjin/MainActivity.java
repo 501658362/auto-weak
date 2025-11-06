@@ -18,6 +18,8 @@ import android.content.IntentFilter;
 import android.content.Context;
 import android.app.ActivityManager;
 import android.widget.CheckBox;
+import android.os.Handler;
+import android.os.Looper;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -37,6 +39,17 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    private Handler countdownHandler = new Handler(Looper.getMainLooper());
+    private Runnable countdownRunnable;
+    private long nextExecuteTimestamp = 0;
+    private int currentInterval = 0;
+    private int currentLoop = 0;
+    private int currentCount = 0;
+    private int currentUnitPos = 0;
+    private int executedTimes = 0;
+
+    private BroadcastReceiver vibrateNextReceiver; // 新增
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -51,6 +64,8 @@ public class MainActivity extends AppCompatActivity {
         btnStartStop = findViewById(R.id.btn_start_stop);
         Button btnApply = findViewById(R.id.btn_apply);
         CheckBox cbShake = findViewById(R.id.cb_shake); // 新增
+        TextView tvNextTime = findViewById(R.id.tv_next_time); // 新增
+        TextView tvCountdown = findViewById(R.id.tv_countdown); // 新增
 
         // 新增：读取参数并填充
         loadParams(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
@@ -74,11 +89,28 @@ public class MainActivity extends AppCompatActivity {
                         isRunning = false;
                         Toast.makeText(MainActivity.this, "循环已结束", Toast.LENGTH_SHORT).show();
                         stopVibrateService(); // 新增：确保通知也被取消
+                        stopCountdown(); // 新增
                     });
                 }
             }
         };
         registerReceiver(vibrateFinishReceiver, new IntentFilter("top.chenyanjin.VIBRATE_FINISH"));
+
+        // 新增：注册每次震动完成广播
+        vibrateNextReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if ("top.chenyanjin.VIBRATE_NEXT".equals(intent.getAction())) {
+                    long nextTime = intent.getLongExtra("next_execute_time", System.currentTimeMillis());
+                    nextExecuteTimestamp = nextTime;
+                    // 立即刷新倒计时显示
+                    TextView tvNextTime = findViewById(R.id.tv_next_time);
+                    TextView tvCountdown = findViewById(R.id.tv_countdown);
+                    startCountdown(tvNextTime, tvCountdown);
+                }
+            }
+        };
+        registerReceiver(vibrateNextReceiver, new IntentFilter("top.chenyanjin.VIBRATE_NEXT"));
 
         // 预计停止时间逻辑
         TextWatcher watcher = new TextWatcher() {
@@ -132,12 +164,23 @@ public class MainActivity extends AppCompatActivity {
                 // 新增：保存参数
                 saveParams(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
                 startVibrateService(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
+
+                // 新增：初始化倒计时参数
+                currentInterval = parseInt(editInterval.getText().toString(), 60);
+                currentUnitPos = spinnerUnit.getSelectedItemPosition();
+                if (currentUnitPos == 1) currentInterval = currentInterval * 60;
+                currentLoop = parseInt(editLoop.getText().toString(), -1);
+                executedTimes = 0;
+                nextExecuteTimestamp = System.currentTimeMillis() + currentInterval * 1000L;
+                startCountdown(tvNextTime, tvCountdown);
+
                 btnStartStop.setText("停止");
                 isRunning = true;
             } else {
                 stopVibrateService();
                 btnStartStop.setText("开始");
                 isRunning = false;
+                stopCountdown();
             }
         });
     }
@@ -159,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
                             isRunning = false;
                             Toast.makeText(MainActivity.this, "循环已结束", Toast.LENGTH_SHORT).show();
                             stopVibrateService();
+                            stopCountdown(); // 新增
                         });
                     }
                 }
@@ -177,6 +221,11 @@ public class MainActivity extends AppCompatActivity {
             unregisterReceiver(vibrateFinishReceiver);
             vibrateFinishReceiver = null;
         }
+        if (vibrateNextReceiver != null) {
+            unregisterReceiver(vibrateNextReceiver);
+            vibrateNextReceiver = null;
+        }
+        stopCountdown();
     }
 
     private void updateEstimate(EditText editInterval, Spinner spinnerUnit, EditText editLoop, TextView tvEstimate) {
@@ -195,6 +244,31 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // 新增：倒计时刷新逻辑
+    private void startCountdown(TextView tvNextTime, TextView tvCountdown) {
+        stopCountdown();
+        countdownRunnable = new Runnable() {
+            @Override
+            public void run() {
+                long now = System.currentTimeMillis();
+                long remain = (nextExecuteTimestamp - now) / 1000;
+                if (remain < 0) remain = 0;
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("HH:mm:ss");
+                tvNextTime.setText("下一次执行时间：" + sdf.format(new java.util.Date(nextExecuteTimestamp)));
+                tvCountdown.setText("倒计时：" + remain + " 秒");
+                countdownHandler.postDelayed(this, 1000);
+            }
+        };
+        countdownHandler.post(countdownRunnable);
+    }
+
+    private void stopCountdown() {
+        if (countdownRunnable != null) {
+            countdownHandler.removeCallbacks(countdownRunnable);
+            countdownRunnable = null;
+        }
+    }
+
     private void startVibrateService(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast, CheckBox cbShake) {
         int interval = parseInt(editInterval.getText().toString(), 60);
         int count = parseInt(editCount.getText().toString(), 1);
@@ -203,13 +277,16 @@ public class MainActivity extends AppCompatActivity {
         int loop = parseInt(editLoop.getText().toString(), -1);
         String toastText = editToast.getText().toString();
         if (toastText.isEmpty()) toastText = "该翻身了";
-        boolean shake = cbShake.isChecked(); // 新增
+        boolean shake = cbShake.isChecked();
         Intent intent = new Intent(this, VibrateService.class);
         intent.putExtra(VibrateService.EXTRA_INTERVAL, interval);
         intent.putExtra(VibrateService.EXTRA_COUNT, count);
         intent.putExtra(VibrateService.EXTRA_LOOP, loop);
         intent.putExtra(VibrateService.EXTRA_TOAST, toastText);
-        intent.putExtra(VibrateService.EXTRA_SHAKE, shake); // 新增
+        intent.putExtra(VibrateService.EXTRA_SHAKE, shake);
+        intent.putExtra("next_execute_time", System.currentTimeMillis() + interval * 1000L); // 新增
+        intent.putExtra("interval", interval); // 新增
+        intent.putExtra("loop", loop); // 新增
         startService(intent);
     }
 
@@ -273,5 +350,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         // 删除原onDestroy中的unregisterReceiver逻辑
+        if (vibrateNextReceiver != null) {
+            unregisterReceiver(vibrateNextReceiver);
+            vibrateNextReceiver = null;
+        }
     }
 }
