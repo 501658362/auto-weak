@@ -43,10 +43,15 @@ public class VibrateService extends Service {
     private static final String CHANNEL_ID = "vibrate_service_channel";
     private static final int NOTIFY_ID = 1001;
 
+    private long nextExecuteTime = 0; // 新增
+    private Handler notifyHandler; // 新增：通知栏刷新 handler
+    private Runnable notifyRunnable; // 新增：通知栏刷新任务
+
     @Override
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
+        notifyHandler = new Handler(Looper.getMainLooper()); // 新增
     }
 
     @Override
@@ -80,11 +85,13 @@ public class VibrateService extends Service {
                 currentLoop = 0;
                 startForegroundService();
                 startVibrateLoop();
+                startNotifyCountdown(); // 新增：启动通知栏倒计时刷新
             } else if (needRestart) {
                 // 参数变化时重启震动循环，但不停止服务
                 stopVibrateLoop();
                 currentLoop = 0; // 参数变化时重置循环计数
                 startVibrateLoop();
+                startNotifyCountdown(); // 新增：参数变化时重启通知栏刷新
                 showToast("参数已应用并生效"); // 可选：提示参数已应用
             }
         }
@@ -103,13 +110,47 @@ public class VibrateService extends Service {
                 manager.createNotificationChannel(channel);
             }
         }
+        nextExecuteTime = System.currentTimeMillis() + intervalSec * 1000L; // 初始化下一次执行时间
+        updateForegroundNotification(); // 只初始化一次
+    }
+
+    // 新增：通知栏倒计时刷新逻辑
+    private void startNotifyCountdown() {
+        stopNotifyCountdown();
+        notifyRunnable = new Runnable() {
+            @Override
+            public void run() {
+                updateForegroundNotification();
+                notifyHandler.postDelayed(this, 1000);
+            }
+        };
+        notifyHandler.post(notifyRunnable);
+    }
+
+    private void stopNotifyCountdown() {
+        if (notifyHandler != null && notifyRunnable != null) {
+            notifyHandler.removeCallbacks(notifyRunnable);
+            notifyRunnable = null;
+        }
+    }
+
+    private void updateForegroundNotification() {
+        long remain = (nextExecuteTime - System.currentTimeMillis()) / 1000;
+        if (remain < 0) remain = 0;
+        String nextTimeStr = new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date(nextExecuteTime));
+        String notifyText = "震动间隔：" + intervalSec + "秒，每次" + count + "下"
+                + "\n预计下一次：" + nextTimeStr
+                + "\n倒计时：" + remain + "秒";
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("定时震动已开启")
-            .setContentText("震动间隔：" + intervalSec + "秒，每次" + count + "下")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setOngoing(true)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(notifyText))
             .build();
-        startForeground(NOTIFY_ID, notification);
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager != null) {
+            manager.notify(NOTIFY_ID, notification);
+        }
     }
 
     private void startVibrateLoop() {
@@ -131,10 +172,12 @@ public class VibrateService extends Service {
                 currentLoop++;
                 // 新增：发送下一次执行时间广播
                 if (running && (loop < 0 || currentLoop < loop)) {
+                    nextExecuteTime = System.currentTimeMillis() + intervalSec * 1000L; // 保证下一次执行时间准确
                     long nextTime = System.currentTimeMillis() + intervalSec * 1000L;
                     Intent nextIntent = new Intent("top.chenyanjin.VIBRATE_NEXT");
                     nextIntent.putExtra("next_execute_time", nextTime);
                     sendBroadcast(nextIntent);
+                    updateForegroundNotification(); // 新增：每次循环后刷新通知
                     handler.postDelayed(this, intervalSec * 1000L);
                 }
                 if (loop > 0 && currentLoop >= loop) {
@@ -259,6 +302,7 @@ public class VibrateService extends Service {
     @Override
     public void onDestroy() {
         stopVibrateLoop();
+        stopNotifyCountdown(); // 新增：停止通知栏刷新
         stopForeground(true);
         super.onDestroy();
     }
