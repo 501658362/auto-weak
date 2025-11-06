@@ -49,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private int executedTimes = 0;
 
     private BroadcastReceiver vibrateNextReceiver; // 新增
+    private boolean needResetButton = false; // 新增标志
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,22 +79,33 @@ public class MainActivity extends AppCompatActivity {
             isRunning = false;
         }
 
-        // 注册循环结束广播移到onResume
+        // 注册循环结束广播，只注册一次
         vibrateFinishReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                if ("top.chenyanjin.VIBRATE_FINISH".equals(intent.getAction())) {
-                    runOnUiThread(() -> {
+                android.util.Log.d(TAG, "收到 VIBRATE_FINISH_UI 广播，自动停止任务 onReceive");
+                runOnUiThread(() -> {
+                    android.util.Log.d(TAG, "runOnUiThread 执行");
+                    if (btnStartStop == null) {
+                        btnStartStop = findViewById(R.id.btn_start_stop);
+                        android.util.Log.d(TAG, "btnStartStop 重新获取引用: " + (btnStartStop != null));
+                    }
+                    if (btnStartStop != null) {
                         btnStartStop.setText("开始");
-                        isRunning = false;
-                        Toast.makeText(MainActivity.this, "循环已结束", Toast.LENGTH_SHORT).show();
-                        stopVibrateService(); // 新增：确保通知也被取消
-                        stopCountdown(); // 新增
-                    });
-                }
+                        android.util.Log.d(TAG, "按钮文案已改为开始（自动停止）");
+                        needResetButton = true;
+                    } else {
+                        android.util.Log.e(TAG, "btnStartStop 仍然为 null，无法修改文案");
+                    }
+                    isRunning = false;
+                    stopVibrateService(); // 确保服务彻底停止
+                    stopCountdown();
+                    Toast.makeText(MainActivity.this, "循环已结束", Toast.LENGTH_SHORT).show();
+                });
             }
         };
-        registerReceiver(vibrateFinishReceiver, new IntentFilter("top.chenyanjin.VIBRATE_FINISH"));
+        // 注册新的 UI 广播
+        registerReceiver(vibrateFinishReceiver, new IntentFilter("top.chenyanjin.VIBRATE_FINISH_UI"));
 
         // 新增：注册每次震动完成广播
         vibrateNextReceiver = new BroadcastReceiver() {
@@ -110,6 +122,10 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         registerReceiver(vibrateNextReceiver, new IntentFilter("top.chenyanjin.VIBRATE_NEXT"));
+
+        // 注册按钮文案更新广播（移到onCreate，保证后台也能接收）
+        IntentFilter filter = new IntentFilter("top.chenyanjin.UPDATE_BUTTON");
+        registerReceiver(buttonUpdateReceiver, filter);
 
         // 预计停止时间逻辑
         TextWatcher watcher = new TextWatcher() {
@@ -135,6 +151,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnStartStop.setOnClickListener(v -> {
+            android.util.Log.d(TAG, "按钮点击时 isRunning=" + isRunning);
             if (!isRunning) {
                 // 恢复参数保存
                 saveParams(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
@@ -150,10 +167,12 @@ public class MainActivity extends AppCompatActivity {
                 startCountdown(tvNextTime, tvCountdown);
 
                 btnStartStop.setText("停止");
+                android.util.Log.d(TAG, "按钮文案已改为停止（手动开始）");
                 isRunning = true;
             } else {
                 stopVibrateService();
                 btnStartStop.setText("开始");
+                android.util.Log.d(TAG, "按钮文案已改为开始（手动停止）");
                 isRunning = false;
                 stopCountdown();
             }
@@ -163,36 +182,49 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        IntentFilter filter = new IntentFilter("top.chenyanjin.UPDATE_BUTTON");
-        registerReceiver(buttonUpdateReceiver, filter);
-
-        if (vibrateFinishReceiver == null) {
-            vibrateFinishReceiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    if ("top.chenyanjin.VIBRATE_FINISH".equals(intent.getAction())) {
-                        android.util.Log.d(TAG, "收到循环结束广播");
-                        runOnUiThread(() -> {
-                            btnStartStop.setText("开始");
-                            isRunning = false;
-                            Toast.makeText(MainActivity.this, "循环已结束", Toast.LENGTH_SHORT).show();
-                            stopVibrateService();
-                            stopCountdown(); // 新增
-                        });
-                    }
-                }
-            };
-            android.util.Log.d(TAG, "注册循环结束广播");
-            registerReceiver(vibrateFinishReceiver, new IntentFilter("top.chenyanjin.VIBRATE_FINISH"));
+        android.util.Log.d(TAG, "onResume: needResetButton=" + needResetButton + ", isVibrateServiceRunning=" + isVibrateServiceRunning());
+        // 优先处理自动结束标志，防止被服务状态覆盖
+        if (needResetButton) {
+            btnStartStop.setText("开始");
+            android.util.Log.d(TAG, "onResume: 按钮文案已改为开始（自动结束标志）");
+            isRunning = false;
+            needResetButton = false;
+        } else {
+            // 只在服务真的运行时才设置为“停止”
+            if (isVibrateServiceRunning()) {
+                btnStartStop.setText("停止");
+                android.util.Log.d(TAG, "onResume: 按钮文案已改为停止（服务运行）");
+                isRunning = true;
+            } else {
+                btnStartStop.setText("开始");
+                android.util.Log.d(TAG, "onResume: 按钮文案已改为开始（服务未运行）");
+                isRunning = false;
+            }
         }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        unregisterReceiver(buttonUpdateReceiver);
+        // 只注销 vibrateNextReceiver，不注销 vibrateFinishReceiver
+        // if (vibrateFinishReceiver != null) {
+        //     android.util.Log.d(TAG, "注销循环结束广播");
+        //     unregisterReceiver(vibrateFinishReceiver);
+        //     vibrateFinishReceiver = null;
+        // }
+        if (vibrateNextReceiver != null) {
+            unregisterReceiver(vibrateNextReceiver);
+            vibrateNextReceiver = null;
+        }
+        stopCountdown();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // 在 onDestroy 时注销 vibrateFinishReceiver
         if (vibrateFinishReceiver != null) {
-            android.util.Log.d(TAG, "注销循环结束广播");
+            android.util.Log.d(TAG, "onDestroy: 注销循环结束广播");
             unregisterReceiver(vibrateFinishReceiver);
             vibrateFinishReceiver = null;
         }
@@ -200,7 +232,10 @@ public class MainActivity extends AppCompatActivity {
             unregisterReceiver(vibrateNextReceiver);
             vibrateNextReceiver = null;
         }
-        stopCountdown();
+        // 新增：注销按钮文案更新广播
+        if (buttonUpdateReceiver != null) {
+            unregisterReceiver(buttonUpdateReceiver);
+        }
     }
 
     private void updateEstimate(EditText editInterval, Spinner spinnerUnit, EditText editLoop, TextView tvEstimate) {
@@ -313,15 +348,5 @@ public class MainActivity extends AppCompatActivity {
         editLoop.setText(sp.getString("loop", "-1"));
         editToast.setText(sp.getString("toast", ""));
         cbShake.setChecked(sp.getBoolean("shake", false));
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // 删除原onDestroy中的unregisterReceiver逻辑
-        if (vibrateNextReceiver != null) {
-            unregisterReceiver(vibrateNextReceiver);
-            vibrateNextReceiver = null;
-        }
     }
 }

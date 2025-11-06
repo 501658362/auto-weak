@@ -185,10 +185,15 @@ public class VibrateService extends Service {
                     // 循环结束时发送显式广播
                     LogUtil.i("info", "循环结束时发送显式广播");
                     Intent finishIntent = new Intent("top.chenyanjin.VIBRATE_FINISH");
-                    finishIntent.setClassName(getPackageName(), "top.chenyanjin.VibrateReceiver");
+                    finishIntent.setClassName(getPackageName(), "top.chenyanjin.MainActivity");
                     finishIntent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES); // 确保广播能发给未启动的接收方
                     LogUtil.i("VibrateService", "发送结束广播: " + finishIntent);
                     sendBroadcast(finishIntent);
+
+                    // 新增：发送 UI 控制广播，通知按钮文案改为“开始”
+                    Intent finishUIIntent = new Intent("top.chenyanjin.VIBRATE_FINISH_UI");
+                    sendBroadcast(finishUIIntent);
+
                     removeNotification(); // 新增：自动结束时移除通知
                     stopSelf();
                     return;
