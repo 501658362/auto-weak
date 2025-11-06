@@ -14,6 +14,13 @@ import androidx.core.app.NotificationCompat;
 import top.chenyanjin.LogUtil;
 import android.util.Log;
 import android.widget.Toast;
+import android.provider.Settings;
+import android.graphics.PixelFormat;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.content.Context;
 
 public class VibrateService extends Service {
     public static final String EXTRA_INTERVAL = "interval";
@@ -114,6 +121,7 @@ public class VibrateService extends Service {
                     // 震动次数为0时，仅toast和日志
                     LogUtil.i("VibrateService", "震动第" + (currentLoop + 1) + "次, 未震动（次数为0），仅提示");
                     showToast(toastText);
+                    showShakeNotification(); // 新增：屏幕抖动通知
                 }
                 currentLoop++;
                 if (loop > 0 && currentLoop >= loop) {
@@ -147,10 +155,81 @@ public class VibrateService extends Service {
         }
         LogUtil.i("VibrateService", "震动第" + (currentLoop + 1) + "次, 连续震动第" + (index + 1) + "下");
         showToast(toastText);
+        showShakeNotification(); // 新增：屏幕抖动通知
         // 下一个震动
         if (index + 1 < count) {
             handler.postDelayed(() -> vibrateMultipleTimes(vibrator, count, index + 1), 350);
         }
+    }
+
+    // 新增：发送高优先级通知模拟屏幕抖动
+    private void showShakeNotification() {
+        showShakeOverlay(); // 新增：屏幕悬浮窗抖动
+    }
+
+    // 新增：悬浮窗抖动实现
+    private void showShakeOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+                intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                Toast.makeText(this, "请授权悬浮窗权限以实现屏幕抖动", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        final WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+        if (wm == null) return;
+
+        final FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(0x00000000); // 悬浮窗本身透明
+
+        // 新增：添加一个半透明黑色遮罩
+        View mask = new View(this);
+        mask.setBackgroundColor(0x22000000); // 半透明黑色，视觉明显
+        overlay.addView(mask, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        final WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = 0;
+        params.y = 0;
+
+        try {
+            wm.addView(overlay, params);
+        } catch (Exception e) {
+            return;
+        }
+
+        // 让遮罩左右抖动
+        final int shakeDistance = 40; // px
+        final int shakeTimes = 8;
+        final int shakeInterval = 30; // ms
+
+        mask.post(new Runnable() {
+            @Override
+            public void run() {
+                for (int i = 0; i < shakeTimes; i++) {
+                    final int dx = (i % 2 == 0 ? shakeDistance : -shakeDistance);
+                    mask.postDelayed(() -> mask.setTranslationX(dx), i * shakeInterval);
+                }
+                mask.postDelayed(() -> {
+                    mask.setTranslationX(0);
+                    try { wm.removeView(overlay); } catch (Exception ignore) {}
+                }, shakeTimes * shakeInterval + 50);
+            }
+        });
     }
 
     private void stopVibrateLoop() {
