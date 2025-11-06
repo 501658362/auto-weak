@@ -28,6 +28,7 @@ public class VibrateService extends Service {
     public static final String EXTRA_LOOP = "loop";
     public static final String EXTRA_TOAST = "toast";
     public static final String ACTION_STOP = "stop";
+    public static final String EXTRA_SHAKE = "shake"; // 新增
 
     private Handler handler;
     private Runnable vibrateRunnable;
@@ -37,6 +38,7 @@ public class VibrateService extends Service {
     private int loop = -1; // -1 表示无限
     private String toastText = "该翻身了";
     private int currentLoop = 0;
+    private boolean shake = true; // 新增，默认抖动
 
     private static final String CHANNEL_ID = "vibrate_service_channel";
     private static final int NOTIFY_ID = 1001;
@@ -59,15 +61,18 @@ public class VibrateService extends Service {
             int newCount = intent.getIntExtra(EXTRA_COUNT, count);
             int newLoop = intent.getIntExtra(EXTRA_LOOP, loop);
             String newToastText = intent.getStringExtra(EXTRA_TOAST);
+            boolean newShake = intent.getBooleanExtra(EXTRA_SHAKE, shake); // 新增
+
             if (newToastText == null || newToastText.isEmpty()) newToastText = toastText;
 
             boolean needRestart = false;
             // 检查参数是否变化
-            if (newInterval != intervalSec || newCount != count || newLoop != loop || !newToastText.equals(toastText)) {
+            if (newInterval != intervalSec || newCount != count || newLoop != loop || !newToastText.equals(toastText) || newShake != shake) {
                 intervalSec = newInterval;
                 count = newCount;
                 loop = newLoop;
                 toastText = newToastText;
+                shake = newShake; // 新增
                 needRestart = true;
             }
             // 若服务未运行，初始化 currentLoop
@@ -164,7 +169,9 @@ public class VibrateService extends Service {
 
     // 新增：发送高优先级通知模拟屏幕抖动
     private void showShakeNotification() {
-        showShakeOverlay(); // 新增：屏幕悬浮窗抖动
+        if (shake) {
+            showShakeOverlay(); // 仅在 shake 为 true 时抖动
+        }
     }
 
     // 新增：悬浮窗抖动实现

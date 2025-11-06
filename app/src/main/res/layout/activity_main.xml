@@ -75,6 +75,15 @@
                 android:text=""
                 android:inputType="text" />
 
+            <!-- 新增：屏幕抖动开关 -->
+            <CheckBox
+                android:id="@+id/cb_shake"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="屏幕抖动"
+                android:checked="true"
+                android:paddingTop="8dp"/>
+
         </LinearLayout>
     </ScrollView>
 

@@ -17,6 +17,7 @@ import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
 import android.content.Context;
 import android.app.ActivityManager;
+import android.widget.CheckBox;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -49,9 +50,10 @@ public class MainActivity extends AppCompatActivity {
         TextView tvEstimate = findViewById(R.id.tv_estimate);
         btnStartStop = findViewById(R.id.btn_start_stop);
         Button btnApply = findViewById(R.id.btn_apply);
+        CheckBox cbShake = findViewById(R.id.cb_shake); // 新增
 
         // 新增：读取参数并填充
-        loadParams(editInterval, editCount, spinnerUnit, editLoop, editToast);
+        loadParams(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
 
         // 每次进入页面时检查服务是否在运行，刷新按钮文案
         if (isVibrateServiceRunning()) {
@@ -111,11 +113,13 @@ public class MainActivity extends AppCompatActivity {
                 int loop = parseInt(editLoop.getText().toString(), -1);
                 String toastText = editToast.getText().toString();
                 if (toastText.isEmpty()) toastText = "该翻身了";
+                boolean shake = cbShake.isChecked(); // 新增
                 Intent intent = new Intent(this, VibrateService.class);
                 intent.putExtra(VibrateService.EXTRA_INTERVAL, interval);
                 intent.putExtra(VibrateService.EXTRA_COUNT, count);
                 intent.putExtra(VibrateService.EXTRA_LOOP, loop);
                 intent.putExtra(VibrateService.EXTRA_TOAST, toastText);
+                intent.putExtra(VibrateService.EXTRA_SHAKE, shake); // 新增
                 startService(intent);
                 Toast.makeText(this, "设置已应用并生效", Toast.LENGTH_SHORT).show();
             } else {
@@ -126,8 +130,8 @@ public class MainActivity extends AppCompatActivity {
         btnStartStop.setOnClickListener(v -> {
             if (!isRunning) {
                 // 新增：保存参数
-                saveParams(editInterval, editCount, spinnerUnit, editLoop, editToast);
-                startVibrateService(editInterval, editCount, spinnerUnit, editLoop, editToast);
+                saveParams(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
+                startVibrateService(editInterval, editCount, spinnerUnit, editLoop, editToast, cbShake);
                 btnStartStop.setText("停止");
                 isRunning = true;
             } else {
@@ -191,7 +195,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void startVibrateService(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast) {
+    private void startVibrateService(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast, CheckBox cbShake) {
         int interval = parseInt(editInterval.getText().toString(), 60);
         int count = parseInt(editCount.getText().toString(), 1);
         int unitPos = spinnerUnit.getSelectedItemPosition();
@@ -199,11 +203,13 @@ public class MainActivity extends AppCompatActivity {
         int loop = parseInt(editLoop.getText().toString(), -1);
         String toastText = editToast.getText().toString();
         if (toastText.isEmpty()) toastText = "该翻身了";
+        boolean shake = cbShake.isChecked(); // 新增
         Intent intent = new Intent(this, VibrateService.class);
         intent.putExtra(VibrateService.EXTRA_INTERVAL, interval);
         intent.putExtra(VibrateService.EXTRA_COUNT, count);
         intent.putExtra(VibrateService.EXTRA_LOOP, loop);
         intent.putExtra(VibrateService.EXTRA_TOAST, toastText);
+        intent.putExtra(VibrateService.EXTRA_SHAKE, shake); // 新增
         startService(intent);
     }
 
@@ -234,7 +240,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // 新增：保存参数到 SharedPreferences
-    private void saveParams(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast) {
+    private void saveParams(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast, CheckBox cbShake) {
         getSharedPreferences("vibrate_params", MODE_PRIVATE)
             .edit()
             .putInt("interval", parseInt(editInterval.getText().toString(), 60))
@@ -242,22 +248,25 @@ public class MainActivity extends AppCompatActivity {
             .putInt("unit", spinnerUnit.getSelectedItemPosition())
             .putInt("loop", parseInt(editLoop.getText().toString(), -1))
             .putString("toast", editToast.getText().toString())
+            .putBoolean("shake", cbShake.isChecked()) // 新增
             .apply();
     }
 
     // 新增：读取参数并填充到输入框
-    private void loadParams(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast) {
+    private void loadParams(EditText editInterval, EditText editCount, Spinner spinnerUnit, EditText editLoop, EditText editToast, CheckBox cbShake) {
         android.content.SharedPreferences sp = getSharedPreferences("vibrate_params", MODE_PRIVATE);
         int interval = sp.getInt("interval", 60);
         int count = sp.getInt("count", 1);
         int unit = sp.getInt("unit", 0);
         int loop = sp.getInt("loop", 0);
         String toast = sp.getString("toast", "");
+        boolean shake = sp.getBoolean("shake", true); // 新增，默认抖动
         editInterval.setText(String.valueOf(interval));
         editCount.setText(String.valueOf(count));
         spinnerUnit.setSelection(unit);
         editLoop.setText(String.valueOf(loop));
         editToast.setText(toast);
+        cbShake.setChecked(shake);
     }
 
     @Override
